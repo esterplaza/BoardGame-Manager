@@ -11,6 +11,16 @@ BGG_TOKEN = os.getenv("BGG_TOKEN")
 
 
 def search_games(title: str):
+    """
+    Search BoardGameGeek for games matching a title.
+
+    Args:
+        title: Game title to search for.
+
+    Returns:
+        list[dict]: list of matching games that contains the BGG ID, title and
+        release year.
+    """
     params = {
         "query": title,
         "type": "boardgame"
