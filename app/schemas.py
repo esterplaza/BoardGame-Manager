@@ -13,6 +13,7 @@ class GameCreate(BaseModel):
     average_rating: float | None = None
     box_image: str | None = None
 
+
 class GameUpdate(BaseModel):
     name: str | None = None
     release_year: int | None = None
@@ -23,3 +24,9 @@ class GameUpdate(BaseModel):
     min_age: int | None = None
     average_rating: float | None = None
     box_image: str | None = None
+
+
+class BGGSearchResult(BaseModel):
+    bgg_id: int
+    title: str
+    release_year: int | None = None
