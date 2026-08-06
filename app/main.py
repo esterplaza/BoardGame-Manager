@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.services.bgg import search_games, get_game_details, get_game_types
-from .database import SessionLocal, engine
-from .models import Game, Base, Type, GameType
-from .schemas import GameCreate, GameUpdate, BGGSearchResult
-from app.services.game_types import get_or_create_type
+from app.repositories.sqlalchemy_game_repository import SQLAlchemyGameRepository
+from app.services.bgg_service import BGGService
+from app.services.game_service import GameService
+from app.database.database import SessionLocal, engine
+from app.exceptions.exceptions import GameAlreadyExistsError, BGGGameNotFoundError
+from app.database.models.models import Game, Base
+from app.schemas.schemas import GameCreate, GameUpdate, BGGSearchResult, GameResponse
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,52 +25,54 @@ def get_db():
         db.close()
 
 
+def get_game_service(db: Session = Depends(get_db)) -> GameService:
+    repository = SQLAlchemyGameRepository(db)
+    return GameService(repository)
+
+
 @app.get("/")
 def root():
     return {"message": "Welcome to BoardGame Manager"}
 
 
-@app.post("/games")
-def create_game(game: GameCreate, db: Session = Depends(get_db)):
+@app.post("/games", response_model=GameResponse)
+def create_game(game: GameCreate, service: GameService = Depends(get_game_service)):
     """
     Create a new game in the game table in the database
     Args:
         game: Game data received from the client (GameCreate schema)
-        db: Database session
+        service: Service responsible for game management
 
     Returns:
         Game: The created game
     """
-    db_game = Game(**game.model_dump())
-    db.add(db_game)
-    db.commit()
-    db.refresh(db_game)
+    db_game = service.create_game(game)
     return db_game
 
 
-@app.get("/games")
-def get_games(db: Session = Depends(get_db)):
+@app.get("/games", response_model=list[GameResponse])
+def get_games(service: GameService = Depends(get_game_service)):
     """
     Retrieve all games from the database
 
     Args:
-        db: database session
+        service: Service responsible for game management
 
     Returns:
         list[Game]: list of all games
     """
-    games = db.execute(select(Game)).scalars().all()
+    games = service.get_games()
     return games
 
 
-@app.get("/games/{game_id}")
-def get_game(game_id: int, db: Session = Depends(get_db)):
+@app.get("/games/{game_id}", response_model=GameResponse)
+def get_game(game_id: int, service: GameService = Depends(get_game_service)):
     """
     Retrieve Game information from database by game iD.
 
     Args:
         game_id: ID of the game
-        db: Database session
+        service: Service responsible for game management
 
     Returns:
         Game: The requested Game
@@ -77,25 +80,24 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     Raises:
         HTTPException: if the game does not exist in database
     """
-    game = db.execute(select(Game).where(Game.id == game_id)).scalar_one_or_none()
+    game = service.get_game(game_id)
     if game is None:
         raise HTTPException(
             status_code=404,
             detail="Game not found"
         )
-    print(type(game))
     return game
 
 
-@app.put("/games/{game_id}")
-def update_game(game_id: int, game_update: GameUpdate, db: Session = Depends(get_db)):
+@app.put("/games/{game_id}", response_model=GameResponse)
+def update_game(game_id: int, game_update: GameUpdate, service: GameService = Depends(get_game_service)):
     """
     Update one or more fields of an existing game in the db.
 
     Args:
         game_id: ID of the game
         game_update: Fields to update
-        db: Database session
+        service: Service responsible for game management
 
     Returns:
         Game: The updated game
@@ -103,27 +105,22 @@ def update_game(game_id: int, game_update: GameUpdate, db: Session = Depends(get
     Raises:
         HTTPException: if the game does not exist in database
     """
-    game = db.execute(select(Game).where(Game.id == game_id)).scalar_one_or_none()
+    game = service.update_game(game_id, game_update)
     if game is None:
         raise HTTPException(
             status_code=404,
             detail="Game not found"
         )
-    update_data = game_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(game, key, value)
-    db.commit()
-    db.refresh(game)
     return game
 
 
 @app.delete("/games/{game_id}")
-def delete_game(game_id: int, db: Session = Depends(get_db)):
+def delete_game(game_id: int, service: GameService = Depends(get_game_service)):
     """
     Deletes a game from the database
     Args:
         game_id: ID of the game
-        db: Database session
+        service: Service responsible for game management
 
     Returns:
         dict: message when the game has been deleted
@@ -131,18 +128,12 @@ def delete_game(game_id: int, db: Session = Depends(get_db)):
     Raises:
         HTTPException: if the game does not exist in database
     """
-    game = db.execute(select(Game).where(Game.id == game_id)).scalar_one_or_none()
+    game = service.delete_game(game_id)
     if game is None:
         raise HTTPException(
             status_code=404,
             detail="Game not found"
         )
-    game_types = db.execute(select(GameType).where(GameType.game_id == game_id)).scalars().all()
-    for game_type in game_types:
-        db.delete(game_type)
-    db.flush()
-    db.delete(game)
-    db.commit()
     return {"message": "Game deleted successfully"}
 
 
@@ -158,7 +149,8 @@ def bgg_search(title: str):
         list[BGGSearchResult]: list of matching games that contains the BGG ID, title and
         release year.
     """
-    return search_games(title)
+    bgg_service = BGGService()
+    return bgg_service.search_games(title)
 
 
 @app.get("/bgg/game/{bgg_id}", response_model=GameCreate)
@@ -172,53 +164,32 @@ def get_bgg_info(bgg_id: int):
     Returns:
         GameCreate: Detailed information of game.
     """
-    return get_game_details(bgg_id)
+    bgg_service = BGGService()
+    return bgg_service.get_game_details(bgg_id)
 
 
-@app.post("/games/import/{bgg_id}")
-def import_game(bgg_id: int, db: Session = Depends(get_db)):
+@app.post("/games/import/{bgg_id}", response_model=GameCreate)
+def import_game(bgg_id: int, service: GameService = Depends(get_game_service)):
     """
     Import a game from Board Game Geek and save it in the database,
     including the game types
     Args:
         bgg_id: Board Game Geek ID of the game
-        db: Database session
+        service: Service responsible for game management
 
     Returns:
         Game: The imported game.
     """
-    existing_game = db.execute(select(Game).where(Game.bgg_id == bgg_id)).first()
-    if existing_game is not None:
+    try:
+        new_game = service.import_game_from_bgg(bgg_id)
+    except GameAlreadyExistsError:
         raise HTTPException(
             status_code=400,
             detail="Game already exists."
         )
-    game_data = get_game_details(bgg_id)
-    if game_data is None:
+    except BGGGameNotFoundError:
         raise HTTPException(
             status_code=404,
             detail="Game not found in BoardGameGeek"
         )
-    new_game = Game(**game_data)
-    db.add(new_game)
-    db.flush()
-    game_types = get_game_types(bgg_id)
-    for category in game_types.get("categories"):
-        type_category = get_or_create_type(db, category, "category")
-        new_type = GameType(
-            game_id=new_game.id,
-            type_id=type_category.id
-        )
-        db.add(new_type)
-        db.flush()
-    for mechanic in game_types.get("mechanics"):
-        type_category = get_or_create_type(db, mechanic, "mechanic")
-        new_type = GameType(
-            game_id=new_game.id,
-            type_id=type_category.id
-        )
-        db.add(new_type)
-        db.flush()
-    db.commit()
-    db.refresh(new_game)
     return new_game

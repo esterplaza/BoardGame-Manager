@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey
-from .database import Base
+from app.database.database import Base
 
 
 class Game(Base):
@@ -14,7 +14,7 @@ class Game(Base):
     min_playing_time = Column(Integer)
     max_playing_time = Column(Integer)
     min_age = Column(Integer)
-    average_rating = Column(Numeric(3, 2))
+    average_rating = Column(Numeric(4, 2))
     box_image = Column(Text)
 
 
