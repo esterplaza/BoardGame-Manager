@@ -21,6 +21,11 @@ class GameRepository(ABC):
         pass
 
     @abstractmethod
+    def add(self, game: Game) -> Game:
+        """Add a new game."""
+        pass
+
+    @abstractmethod
     def update(self, game: Game) -> Game:
         """Update an existing game."""
         pass

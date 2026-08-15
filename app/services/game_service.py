@@ -28,7 +28,7 @@ class GameService:
        """
         return self.game_repository.get_all()
 
-    def _create_game(self, game_data: GameCreate) -> Game:
+    def add_game(self, game_data: GameCreate) -> Game:
         """
         Create a game entity and add it to the current database session.
         The game is not permanently stored until the transaction is comitted.
@@ -50,7 +50,7 @@ class GameService:
             average_rating=game_data.average_rating,
             box_image=game_data.box_image
         )
-        return self.game_repository.create(game)
+        return self.game_repository.add(game)
 
     def create_game(self, game_data: GameCreate) -> Game:
         """
@@ -62,9 +62,19 @@ class GameService:
         Returns:
             Game: Newly created game entity.
         """
-        created_game = self._create_game(game_data)
-        self.game_repository.commit()
-        return created_game
+        game = Game(
+            bgg_id=game_data.bgg_id,
+            name=game_data.name,
+            release_year=game_data.release_year,
+            min_players=game_data.min_players,
+            max_players=game_data.max_players,
+            min_playing_time=game_data.min_playing_time,
+            max_playing_time=game_data.max_playing_time,
+            min_age=game_data.min_age,
+            average_rating=game_data.average_rating,
+            box_image=game_data.box_image
+        )
+        return self.game_repository.create(game)
 
     def update_game(self, game_id: int, game_update: GameUpdate) -> Game | None:
         """
@@ -83,7 +93,6 @@ class GameService:
         for key, value in update_data.items():
             setattr(game, key, value)
         updated_game = self.game_repository.update(game)
-        self.game_repository.commit()
         return updated_game
 
     def delete_game(self, game_id: int) -> Game | None:
@@ -101,7 +110,6 @@ class GameService:
             return None
         self.game_repository.delete_game_types(game_id)
         self.game_repository.delete(game)
-        self.game_repository.commit()
         return game
 
     def get_game_by_bgg_id(self, bgg_id: int) -> Game | None:
@@ -187,7 +195,7 @@ class GameService:
         game_data = bgg_service.get_game_details(bgg_id)
         if game_data is None:
             raise BGGGameNotFoundError
-        new_game = self._create_game(game_data)
+        new_game = self.create_game(game_data)
         game_types = bgg_service.get_game_types(bgg_id)
         for category in game_types.get("categories"):
             existing_type = self.get_type(category, "category")
@@ -203,5 +211,4 @@ class GameService:
                 self.create_game_type(new_game.id, type_category.id)
             else:
                 self.create_game_type(new_game.id, existing_type.id)
-        self.game_repository.commit()
         return new_game

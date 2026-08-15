@@ -10,6 +10,21 @@ class SQLAlchemyGameRepository(GameRepository):
     def __init__(self, db: Session):
         self.db = db
 
+    def rollback(self):
+        """
+        Roll back the current database transaction.
+        Reverts all uncommitted changes in the current session.
+        """
+        self.db.rollback()
+
+    def commit(self):
+        """commit"""
+        try:
+            self.db.commit()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
+
     def get_by_id(self, game_id: int) -> Game | None:
         """
         Retrieves the game information from database by looking for the game id.
@@ -26,6 +41,19 @@ class SQLAlchemyGameRepository(GameRepository):
         )
     
     def create(self, game: Game) -> Game:
+        """
+        Add and persist a game in the database.
+        Args:
+            game: game data to be added
+        Returns:
+            Game: the added game
+        """
+        self.db.add(game)
+        self.commit()
+        self.db.refresh(game)
+        return game
+
+    def add(self, game: Game) -> Game:
         """
         Adds the game to the database.
         Args:
@@ -55,7 +83,7 @@ class SQLAlchemyGameRepository(GameRepository):
         Returns:
             Game: that has been updated
         """
-        self.db.flush()
+        self.commit()
         self.db.refresh(game)
         return game
 
@@ -68,7 +96,7 @@ class SQLAlchemyGameRepository(GameRepository):
             Game: game entity that has been deleted.
         """
         self.db.delete(game)
-        self.db.flush()
+        self.commit()
         return game
 
     def delete_game_types(self, game_id: int) -> list[GameType]:
@@ -85,7 +113,7 @@ class SQLAlchemyGameRepository(GameRepository):
         ).scalars().all()
         for game_type in game_types:
             self.db.delete(game_type)
-        self.db.flush()
+        self.commit()
         return game_types
 
     def get_by_bgg_id(self, bgg_id: int) -> Game | None:
@@ -125,7 +153,7 @@ class SQLAlchemyGameRepository(GameRepository):
             Type: Type entity that has been added.
         """
         self.db.add(new_type)
-        self.db.flush()
+        self.commit()
         return new_type
 
     def create_game_type(self, new_game_type: GameType) -> GameType:
@@ -137,20 +165,6 @@ class SQLAlchemyGameRepository(GameRepository):
             GameType: GameType entity that has been added.
         """
         self.db.add(new_game_type)
-        self.db.flush()
+        self.commit()
         return new_game_type
 
-    def rollback(self):
-        """
-        Roll back the current database transaction.
-        Reverts all uncommitted changes in the current session.
-        """
-        self.db.rollback()
-
-    def commit(self):
-        """commit"""
-        try:
-            self.db.commit()
-        except SQLAlchemyError:
-            self.db.rollback()
-            raise
