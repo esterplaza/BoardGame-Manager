@@ -1,6 +1,7 @@
 import os
-import requests
 import xml.etree.ElementTree as ET
+import requests
+
 from dotenv import load_dotenv
 
 from app.schemas.schemas import GameCreate
@@ -39,7 +40,7 @@ class BGGService:
         headers = {
             "Authorization": f"Bearer {BGG_TOKEN}"
         }
-        response = requests.get(BGG_SEARCH_URL, params=params, headers=headers)
+        response = requests.get(BGG_SEARCH_URL, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         root = ET.fromstring(response.text)
         games = []
@@ -72,7 +73,7 @@ class BGGService:
         headers = {
             "Authorization": f"Bearer {BGG_TOKEN}"
         }
-        response = requests.get(BGG_DETAILS_URL, params=params, headers=headers)
+        response = requests.get(BGG_DETAILS_URL, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         root = ET.fromstring(response.text)
         item = root.find("item")
@@ -82,24 +83,54 @@ class BGGService:
         for element in name_elements:
             if element.get("type") == "primary":
                 name = element.get("value")
+                break
         thumbnail_element = item.find("thumbnail")
-        box_image = thumbnail_element.text if thumbnail_element is not None else None
+        box_image = (
+            thumbnail_element.text
+            if thumbnail_element is not None else None
+        )
         year_published_element = item.find("yearpublished")
-        release_year = year_published_element.get("value") if year_published_element is not None else None
+        release_year = (
+            year_published_element.get("value")
+            if year_published_element is not None else None
+        )
         min_players_element = item.find("minplayers")
-        min_players = min_players_element.get("value") if min_players_element is not None else None
+        min_players = (
+            min_players_element.get("value")
+            if min_players_element is not None else None
+        )
         max_players_element = item.find("maxplayers")
-        max_players = max_players_element.get("value") if max_players_element is not None else None
+        max_players = (max_players_element.get("value")
+                       if max_players_element is not None else None
+                       )
         min_playing_time_element = item.find("minplaytime")
-        min_playing_time = min_playing_time_element.get("value") if min_playing_time_element is not None else None
+        min_playing_time = (
+            min_playing_time_element.get("value")
+            if min_playing_time_element is not None else None
+        )
         max_playing_time_element = item.find("maxplaytime")
-        max_playing_time = max_playing_time_element.get("value") if max_playing_time_element is not None else None
+        max_playing_time = (
+            max_playing_time_element.get("value")
+            if max_playing_time_element is not None else None
+        )
         min_age_element = item.find("minage")
-        min_age = min_age_element.get("value") if min_age_element is not None else None
+        min_age = (
+            min_age_element.get("value")
+            if min_age_element is not None else None
+        )
         statistics_element = item.find("statistics")
-        ratings_element = statistics_element.find("ratings") if statistics_element is not None else None
-        average_element = ratings_element.find("bayesaverage") if ratings_element is not None else None
-        average_rating = average_element.get("value") if average_element is not None else None
+        ratings_element = (
+            statistics_element.find("ratings")
+            if statistics_element is not None else None
+        )
+        average_element = (
+            ratings_element.find("bayesaverage")
+            if ratings_element is not None else None
+        )
+        average_rating = (
+            average_element.get("value")
+            if average_element is not None else None
+        )
         bgg_info = {
             "bgg_id": bgg_id,
             "name": name,
@@ -132,7 +163,7 @@ class BGGService:
         headers = {
             "Authorization": f"Bearer {BGG_TOKEN}"
         }
-        response = requests.get(BGG_DETAILS_URL, params=params, headers=headers)
+        response = requests.get(BGG_DETAILS_URL, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         root = ET.fromstring(response.text)
         item = root.find("item")

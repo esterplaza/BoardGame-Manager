@@ -59,3 +59,28 @@ class BGGSearchResult(BaseModel):
     bgg_id: int
     name: str
     release_year: int | None = None
+
+
+class UserCreate(BaseModel):
+    """
+    Schema for creating a user.
+    """
+    username: str
+    hashed_password: str
+
+
+class UserResponse(BaseModel):
+    """
+    Schema returned when retrieving user information.
+    """
+    id: int
+    username: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    """Schema for the JWT authentication token response."""
+    access_token: str
+    token_type: str

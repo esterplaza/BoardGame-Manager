@@ -7,6 +7,7 @@ from app.repositories.game_repository import GameRepository
 
 
 class SQLAlchemyGameRepository(GameRepository):
+    """Repository implementation for managing games with SQLAlchemy."""
     def __init__(self, db: Session):
         self.db = db
 
@@ -39,7 +40,7 @@ class SQLAlchemyGameRepository(GameRepository):
                 select(Game).where(Game.id == game_id)
             ).scalar_one_or_none()
         )
-    
+
     def create(self, game: Game) -> Game:
         """
         Add and persist a game in the database.
@@ -124,7 +125,8 @@ class SQLAlchemyGameRepository(GameRepository):
         Returns:
             Game| None: Game entity founded or None if no game was found.
         """
-        existing_game = self.db.execute(select(Game).where(Game.bgg_id == bgg_id)).scalar_one_or_none()
+        existing_game = self.db.execute(
+            select(Game).where(Game.bgg_id == bgg_id)).scalar_one_or_none()
         return existing_game
 
     def get_type(self, game_type: str, type_kind: str) -> Type | None:
@@ -167,4 +169,3 @@ class SQLAlchemyGameRepository(GameRepository):
         self.db.add(new_game_type)
         self.commit()
         return new_game_type
-

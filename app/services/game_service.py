@@ -6,6 +6,7 @@ from app.exceptions.exceptions import GameAlreadyExistsError, BGGGameNotFoundErr
 
 
 class GameService:
+    """Provides business logic for managing board games."""
     def __init__(self, game_repository: GameRepository):
         self.game_repository = game_repository
 

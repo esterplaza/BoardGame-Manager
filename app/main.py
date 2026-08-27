@@ -1,42 +1,53 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.repositories.sqlalchemy_game_repository import SQLAlchemyGameRepository
 from app.services.bgg_service import BGGService
 from app.services.game_service import GameService
-from app.database.database import SessionLocal, engine
-from app.exceptions.exceptions import GameAlreadyExistsError, BGGGameNotFoundError
-from app.database.models.models import Game, Base
-from app.schemas.schemas import GameCreate, GameUpdate, BGGSearchResult, GameResponse
+from app.database.database import engine, get_db
+from app.exceptions.exceptions import (
+    GameAlreadyExistsError, BGGGameNotFoundError, UserAlreadyExistsError,
+)
+from app.database.models.models import Base, User
+from app.schemas.schemas import (
+    GameCreate, GameUpdate, BGGSearchResult,
+    GameResponse, UserCreate, UserResponse, Token
+)
+from app.repositories.sqlalchemy_user_repository import SQLAlchemyUserRepository
+from app.services.user_service import UserService
+from app.auth.security import create_access_token
+from app.auth.dependencies import get_current_user, require_admin
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 
-def get_db():
-    """
-    Create a database session and close after the request finishes.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def get_game_service(db: Session = Depends(get_db)) -> GameService:
+    """
+    Create a GameService with a database-backed repository.
+    Args:
+        db: Database session used by the repository.
+    Returns:
+        GameService: Configured game service instance.
+    """
     repository = SQLAlchemyGameRepository(db)
     return GameService(repository)
 
 
 @app.get("/")
 def root():
+    """Return a welcome message for the BoardGame Manager API."""
     return {"message": "Welcome to BoardGame Manager"}
 
 
 @app.post("/games", response_model=GameResponse)
-def create_game(game: GameCreate, service: GameService = Depends(get_game_service)):
+def create_game(
+        game: GameCreate,
+        service: GameService = Depends(get_game_service),
+        _: User = Depends(require_admin)
+):
     """
     Create a new game in the game table in the database
     Args:
@@ -90,7 +101,12 @@ def get_game(game_id: int, service: GameService = Depends(get_game_service)):
 
 
 @app.put("/games/{game_id}", response_model=GameResponse)
-def update_game(game_id: int, game_update: GameUpdate, service: GameService = Depends(get_game_service)):
+def update_game(
+        game_id: int,
+        game_update: GameUpdate,
+        service: GameService = Depends(get_game_service),
+        _: User = Depends(require_admin)
+):
     """
     Update one or more fields of an existing game in the db.
 
@@ -115,7 +131,11 @@ def update_game(game_id: int, game_update: GameUpdate, service: GameService = De
 
 
 @app.delete("/games/{game_id}")
-def delete_game(game_id: int, service: GameService = Depends(get_game_service)):
+def delete_game(
+        game_id: int,
+        service: GameService = Depends(get_game_service),
+        _: User = Depends(require_admin)
+):
     """
     Deletes a game from the database
     Args:
@@ -169,7 +189,11 @@ def get_bgg_info(bgg_id: int):
 
 
 @app.post("/games/import/{bgg_id}", response_model=GameCreate)
-def import_game(bgg_id: int, service: GameService = Depends(get_game_service)):
+def import_game(
+        bgg_id: int,
+        service: GameService = Depends(get_game_service),
+        _: User = Depends(require_admin)
+):
     """
     Import a game from Board Game Geek and save it in the database,
     including the game types
@@ -182,14 +206,84 @@ def import_game(bgg_id: int, service: GameService = Depends(get_game_service)):
     """
     try:
         new_game = service.import_game_from_bgg(bgg_id)
-    except GameAlreadyExistsError:
+    except GameAlreadyExistsError as exc:
         raise HTTPException(
             status_code=400,
             detail="Game already exists."
-        )
-    except BGGGameNotFoundError:
+        ) from exc
+    except BGGGameNotFoundError as exc:
         raise HTTPException(
             status_code=404,
             detail="Game not found in BoardGameGeek"
-        )
+        ) from exc
     return new_game
+
+
+@app.post("/users", response_model=UserResponse, status_code=201)
+def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
+    """
+    Create a new user.
+    Args:
+        user_data: Data required to create the user.
+        db: Database session used to access the user repository.
+    Returns:
+        UserResponse: The newly created user.
+    Raises:
+        HTTPException: If the username already exists.
+    """
+    repository = SQLAlchemyUserRepository(db)
+    service = UserService(repository)
+    try:
+        return service.create_user(user_data)
+    except UserAlreadyExistsError as exc:
+        raise HTTPException(
+            status_code=400, detail="Username already exists."
+        ) from exc
+
+
+@app.post("/login", response_model=Token)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate a user and generate a JWT access token.
+    Args:
+        form_data: Login credentials containing username and password.
+        db: Database session used to access the user repository.
+    Returns:
+        Token: JWT access token and token type for authenticated requests.
+    Raises:
+        HTTPException: If the username or password is incorrect.
+    """
+    repository = SQLAlchemyUserRepository(db)
+    service = UserService(repository)
+
+    user = service.authenticate_user(
+        form_data.username,
+        form_data.password
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
+    access_token = create_access_token(
+        {"sub": str(user.id)}
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+@app.get("/users/me", response_model=UserResponse)
+def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """
+    Retrieve the information of the currently authenticated user.
+    Args:
+        current_user: Authenticated user retrieved from the JWT token.
+    Returns:
+        UserResponse: Information about the currently authenticated user.
+    """
+    return current_user

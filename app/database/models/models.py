@@ -3,6 +3,7 @@ from app.database.database import Base
 
 
 class Game(Base):
+    """Represents a board game stored in the database."""
     __tablename__ = "games"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -19,6 +20,7 @@ class Game(Base):
 
 
 class Type(Base):
+    """Represents a game category or mechanic."""
     __tablename__ = "types"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -27,7 +29,18 @@ class Type(Base):
 
 
 class GameType(Base):
+    """Represents the relationship between a game and a game type."""
     __tablename__ = "game_types"
 
     game_id = Column(Integer, ForeignKey("games.id"), primary_key=True)
     type_id = Column(Integer, ForeignKey("types.id"), primary_key=True)
+
+
+class User(Base):
+    """Represents a user stored in the database."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, nullable=False)
