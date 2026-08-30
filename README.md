@@ -200,7 +200,12 @@ ___
 The following diagram shows the database structure and relationships between the tables.
 ![Database Schema](docs/dbdiagram.png)
 
-## Acknowledgments
+## **Deployment**
+
+___
+The application was successfully deployed to Render with a PostgreSQL database. The deployed environment was tested for database connectivity, authentication, user roles and BGG game imports.
+
+## **Acknowledgments**
 
 ___
 
