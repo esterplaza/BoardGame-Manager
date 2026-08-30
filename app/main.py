@@ -11,7 +11,8 @@ from app.database.database import engine, get_db
 from app.exceptions.exceptions import (
     GameAlreadyExistsError, BGGGameNotFoundError, UserAlreadyExistsError,
 )
-from app.database.models.models import Base, User
+from app.database.database import create_tables
+from app.database.models.models import User
 from app.schemas.schemas import (
     GameCreate, GameUpdate, BGGSearchResult,
     GameResponse, UserCreate, UserResponse, Token
@@ -21,12 +22,12 @@ from app.services.user_service import UserService
 from app.auth.security import create_access_token
 from app.auth.dependencies import get_current_user, require_admin
 
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(
     title="BoardGame Manager",
     description="RESTful API for managing a board game library."
 )
+
+create_tables()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

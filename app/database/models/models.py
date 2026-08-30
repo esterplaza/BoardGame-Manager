@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey
-from app.database.database import Base
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
 
 
 class Game(Base):
